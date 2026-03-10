@@ -3158,7 +3158,7 @@ private:
     int q = (Tb == T4H || Tb == T2S) ? 0 : 1;
     int h = (size == 0b01) ? ((lane >> 2) & 1) : ((lane >> 1) & 1);
     int l = (size == 0b01) ? ((lane >> 1) & 1) : (lane & 1);
-    assert(Ta == T4S || Ta == T2D, "umull{2}v destination register must have arrangement T4S or T2D")
+    assert(Ta == T4S || Ta == T2D, "umull{2}v destination register must have arrangement T4S or T2D");
     assert(size == 0b10 ? lane < 4 : lane < 8, "umull{2}v assumes lane < 4 when using half-words and lane < 8 otherwise");
     assert(Ts == H ? Vm->encoding() < 16 : Vm->encoding() < 32, "umull{2}v requires Vm to be in range V0..V15 when Ts is H");
     f(0, 31), f(q, 30), f(0b101111, 29, 24), f(size, 23, 22), f(l, 21); //f(m, 20);
