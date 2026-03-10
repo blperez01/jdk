@@ -7232,22 +7232,33 @@ class StubGenerator: public StubCodeGenerator {
     const Register a = c_rarg0;
     const Register b = c_rarg1;
     const Register result = c_rarg2;
-    Register limb_mask = r3;
-    Register c_ptr = r4;
-    Register mod_0 = r5;
-    Register mod_1 = r6;
-    Register mod_3 = r7;
-    Register mod_4 = r10;
-    Register b_0 = r11;
-    Register b_1 = r12;
-    Register b_2 = r13;
-    Register b_3 = r14;
-    Register b_4 = r15;
 
-    FloatRegister limb_mask_vec = v0;
-    FloatRegister b_lows = v1;
-    FloatRegister b_highs = v2;
-    FloatRegister a_vals = v3;
+    RegSet regs = RegSet::range(r0, r28) - rscratch1 - rscratch2
+      - r16 - r17 - r18_tls - a - b - result;
+
+    auto common_regs = regs.begin();
+    Register limb_mask = *common_regs++,
+      c_ptr = *common_regs++,
+      mod_0 = *common_regs++,
+      mod_1 = *common_regs++,
+      mod_3 = *common_regs++,
+      mod_4 = *common_regs++,
+      b_0 = *common_regs++,
+      b_1 = *common_regs++,
+      b_2 = *common_regs++,
+      b_3 = *common_regs++,
+      b_4 = *common_regs++;
+    common_regs = common_regs.remaining();
+
+    FloatRegSet floatRegs = FloatRegSet::range(v0, v31)
+      - FloatRegSet::range(v8, v15)   // Caller saved vectors
+      - FloatRegSet::range(v16, v31); // Manually-allocated vectors
+
+    auto common_vectors = floatRegs.begin();
+    FloatRegister limb_mask_vec = *common_vectors++,
+      b_lows = *common_vectors++,
+      b_highs = *common_vectors++,
+      a_vals = *common_vectors++;
 
     // Push callee saved registers on to the stack
     RegSet callee_saved = RegSet::range(r19, r28);
@@ -7262,34 +7273,35 @@ class StubGenerator: public StubCodeGenerator {
     __ dup(limb_mask_vec, __ T2D, limb_mask);
 
     //Load input arrays and modulus
-    {
-      Register a_ptr = r27;
-      Register mod_ptr = r28;
-      __ add(a_ptr, a, 24);
-      __ lea(mod_ptr, ExternalAddress((address)modulus));
-      __ ldr(b_0, Address(b));
-      __ ldr(b_1, Address(b, 8));
-      __ ldr(b_2, Address(b, 16));
-      __ ldr(b_3, Address(b, 24));
-      __ ldr(b_4, Address(b, 32));
-      __ ldr(mod_0, __ post(mod_ptr, 8));
-      __ ldr(mod_1, __ post(mod_ptr, 8));
-      __ ldr(mod_3, __ post(mod_ptr, 8));
-      __ ldr(mod_4, mod_ptr);
-      __ ld1(a_vals, __ T2D, a_ptr);
-      __ ld2(b_lows, b_highs, __ T4S, b);
-    }
+    Register a_ptr = *common_regs++, mod_ptr = *common_regs++;
+    __ add(a_ptr, a, 24);
+    __ lea(mod_ptr, ExternalAddress((address)modulus));
+    __ ldr(b_0, Address(b));
+    __ ldr(b_1, Address(b, 8));
+    __ ldr(b_2, Address(b, 16));
+    __ ldr(b_3, Address(b, 24));
+    __ ldr(b_4, Address(b, 32));
+    __ ldr(mod_0, __ post(mod_ptr, 8));
+    __ ldr(mod_1, __ post(mod_ptr, 8));
+    __ ldr(mod_3, __ post(mod_ptr, 8));
+    __ ldr(mod_4, mod_ptr);
+    __ ld1(a_vals, __ T2D, a_ptr);
+    __ ld2(b_lows, b_highs, __ T4S, b);
+    common_regs = common_regs.remaining()
+      + a_ptr + mod_ptr;
+        a_ptr = mod_ptr = noreg;
 
     //Regs used throughout the main "loop", which is partially unrolled here
-    Register high = r19;
-    Register low = r20;
-    Register mul_ptr = r21;
-    Register mod_high = r23;
-    Register mod_low = r24;
-    Register a_i = r25;
-    Register c_i = r26;
-    Register tmp = r27;
-    Register n = r28;
+    Register high = *common_regs++,
+      low = *common_regs++,
+      mul_ptr = *common_regs++,
+      mod_high = *common_regs++,
+      mod_low = *common_regs++,
+      a_i = *common_regs++,
+      c_i = *common_regs++,
+      tmp = *common_regs++,
+      n = *common_regs++;
+    common_regs = common_regs.remaining();
 
     VSeq<4> A(16);
     VSeq<4> B(20);
@@ -7432,6 +7444,10 @@ class StubGenerator: public StubCodeGenerator {
     __ st1(A[3], __ T2D, __ post(mul_ptr, 16));
     __ st1(D[3], __ T2D, mul_ptr);
 
+    // Free mul_ptr
+    common_regs = common_regs.remaining() + mul_ptr;
+    mul_ptr = noreg;
+
     /////////////////////////
     // Loop 2 & 3
     /////////////////////////
@@ -7535,8 +7551,8 @@ class StubGenerator: public StubCodeGenerator {
       __ str(high, Address(c_ptr, 32));
     }
 
-    Register low_1 = r21;
-    Register high_1 = r22;
+    Register low_1 = *common_regs++;
+    Register high_1 = *common_regs++;
 
     //////////////////////////////
     // a[3]
@@ -7628,6 +7644,16 @@ class StubGenerator: public StubCodeGenerator {
     //////////////////////////////
     // a[4]
     //////////////////////////////
+
+    // Reallocate regs b_0, b_1, b_2
+    common_regs = common_regs.remaining()
+      + b_0 + b_1 + b_2;
+        b_0 = b_1 = b_2 = noreg;
+
+    Register c5 = *common_regs++,
+      c6 = *common_regs++,
+      c7 = *common_regs++;
+
     __ ldr(a_i, a);
     __ ldr(c_i, c_ptr);
 
@@ -7661,8 +7687,6 @@ class StubGenerator: public StubCodeGenerator {
     __ andr(mod_low, mod_low, limb_mask);
     __ add(low_1, low_1, mod_low);
     __ add(high_1, high_1, mod_high);
-
-    Register c5 = r11; //replace b_0
     __ add(c5, c_i, low_1);
     __ ldr(c_i, Address(c_ptr, 16));
     __ lsr(tmp, c5, shift2);
@@ -7672,7 +7696,6 @@ class StubGenerator: public StubCodeGenerator {
     // Limb 2
     __ ldr(low_1, Address(sp, 104));
     __ ldr(high_1, Address(sp, 120));
-    Register c6 = r12;
     __ add(c6, c_i, low);
     __ ldr(c_i, Address(c_ptr, 24));
     __ lsr(tmp, c6, shift2);
@@ -7688,8 +7711,6 @@ class StubGenerator: public StubCodeGenerator {
     __ andr(mod_low, mod_low, limb_mask);
     __ add(low_1, low_1, mod_low);
     __ add(high_1, high_1, mod_high);
-
-    Register c7 = r13;
     __ add(c7, c_i, low_1);
     __ ldr(c_i, Address(c_ptr, 32));
     __ lsr(tmp, c7, shift2);
@@ -7712,18 +7733,14 @@ class StubGenerator: public StubCodeGenerator {
     __ add(low, low, mod_low);
     __ add(high, high, mod_high);
 
-    /////////////////////////////
-    // Final carry propagate
-    /////////////////////////////
+    // Reallocate regs b_3, b_4
+    common_regs = common_regs.remaining()
+      + b_3 + b_4;
+        b_3 = b_4 = noreg;
 
-    // c5 += d1 + dd0 + (d0 >>> BITS_PER_LIMB);
-    // c6 += (c5 >>> BITS_PER_LIMB);
-    // c7 += (c6 >>> BITS_PER_LIMB);
-    // c8 += (c7 >>> BITS_PER_LIMB);
-    // c9 += (c8 >>> BITS_PER_LIMB);
+    Register c8 = *common_regs++,
+      c9 = *common_regs++;
 
-    Register c8 = r14;
-    Register c9 = r15;
     __ add(c8, c_i, low);
     __ lsr(c9, c8, shift2);
     __ add(c9, c9, high);
@@ -7732,6 +7749,10 @@ class StubGenerator: public StubCodeGenerator {
     __ andr(c6, c6, limb_mask);
     __ andr(c7, c7, limb_mask);
     __ andr(c8, c8, limb_mask);
+
+    /////////////////////////////
+    // Final carry propagate
+    /////////////////////////////
 
     // c0 = c5 - modulus[0];
     // c1 = c6 - modulus[1] + (c0 >> BITS_PER_LIMB);
@@ -7743,16 +7764,23 @@ class StubGenerator: public StubCodeGenerator {
     // c4 = c9 - modulus[4] + (c3 >> BITS_PER_LIMB);
     // c3 &= LIMB_MASK;
 
-    Register c0 = r19;
-    Register c1 = r20;
-    Register c2 = r21;
-    Register c3 = r22;
-    Register c4 = r23;
-    Register tmp0 = r24;
-    Register tmp1 = r25;
-    Register tmp2 = r26;
-    Register tmp3 = r27;
-    Register tmp4 = r28;
+    // Free up all unused regs
+    common_regs = common_regs.remaining()
+      + c_ptr + low + high + mod_high
+      + mod_low + a_i + c_i + n + low_1 + high_1;
+        c_ptr = low = high = mod_high
+      = mod_low = a_i = c_i = n = low_1 = high_1 = noreg;
+
+    Register c0 = *common_regs++,
+      c1 = *common_regs++,
+      c2 = *common_regs++,
+      c3 = *common_regs++,
+      c4 = *common_regs++,
+      tmp0 = *common_regs++,
+      tmp1 = *common_regs++,
+      tmp2 = *common_regs++,
+      tmp3 = *common_regs++,
+      tmp4 = *common_regs++;
 
     __ sub(c0, c5, mod_0);
     __ sub(c1, c6, mod_1);
@@ -7775,8 +7803,12 @@ class StubGenerator: public StubCodeGenerator {
     // r[3] = ((c8 & mask) | (c3 & ~mask));
     // r[4] = ((c9 & mask) | (c4 & ~mask));
 
-    Register mask = r5;
-    Register nmask = r6;
+    common_regs = common_regs.remaining()
+      + mod_0 + mod_1 + mod_3 + mod_4;
+        mod_0 = mod_1 = mod_3 = mod_4 = noreg;
+
+    Register mask = *common_regs++;
+    Register nmask = *common_regs++;
 
     __ asr(mask, c4, 63);
     __ mvn(nmask, mask);
