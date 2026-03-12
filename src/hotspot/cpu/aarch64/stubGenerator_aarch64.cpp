@@ -7184,7 +7184,6 @@ class StubGenerator: public StubCodeGenerator {
       b_2 = *common_regs++,
       b_3 = *common_regs++,
       b_4 = *common_regs++;
-    common_regs = common_regs.remaining();
 
     FloatRegSet floatRegs = FloatRegSet::range(v0, v31)
       - FloatRegSet::range(v8, v15)   // Caller saved vectors
@@ -7237,7 +7236,6 @@ class StubGenerator: public StubCodeGenerator {
       c_i = *common_regs++,
       tmp = *common_regs++,
       n = *common_regs++;
-    common_regs = common_regs.remaining();
 
     VSeq<4> A(16);
     VSeq<4> B(20);
@@ -7810,7 +7808,7 @@ class StubGenerator: public StubCodeGenerator {
     const Register bLimbs = c_rarg2;
     const Register length = c_rarg3;
 
-    Label L_Length5, L_Length10, L_Length14, L_Length16, L_Length19, L_DefaultLoop, L_Done;
+    Label L_Length5, L_Length10, L_Length14, L_Length16, L_Length19, L_Default, L_Done;
 
     /*
     int maskValue = -set;
@@ -7835,6 +7833,8 @@ class StubGenerator: public StubCodeGenerator {
     __ br(Assembler::EQ, L_Length16);
     __ cmp(length, (u1)19);
     __ br(Assembler::EQ, L_Length19);
+    __ b(L_Default);
+
 
     // Length = 5
     // Use 5 GPRs (neon not faster with this few limbs)
@@ -8066,6 +8066,30 @@ class StubGenerator: public StubCodeGenerator {
 
       vs_eor(a_vec, a_vec, b_vec);
       vs_stpq_post(a_vec, aLimbs);
+
+      __ b(L_Done);
+    }
+
+    __ BIND(L_Default);
+    {
+      Register ctr = r5;
+      Register a_val = r6;
+      Register b_val = r7;
+
+      __ mov(ctr, length);
+
+      Label default_loop;
+      __ BIND(default_loop);
+
+      __ ldr(a_val, aLimbs);
+      __ ldr(b_val, __ post(bLimbs, 8));
+      __ eor(b_val, b_val, a_val);
+      __ andr(b_val, b_val, mask_scalar);
+      __ eor(a_val, a_val, b_val);
+      __ str(a_val, __ post(aLimbs, 8));
+      __ sub(ctr, ctr, 1);
+      __ cmp(ctr, (u1)0);
+      __ br(Assembler::NE, default_loop);
     }
 
     __ BIND(L_Done);
