@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -67,12 +67,6 @@ class StubGenerator: public StubCodeGenerator {
 
   // Support for intptr_t OrderAccess::fence()
   address generate_orderaccess_fence();
-
-  // Support for intptr_t get_previous_sp()
-  //
-  // This routine is used to find the previous stack pointer for the
-  // caller.
-  address generate_get_previous_sp();
 
   //----------------------------------------------------------------------------------------------------
   // Support for void verify_mxcsr()
@@ -336,6 +330,19 @@ class StubGenerator: public StubCodeGenerator {
 
   void aesecb_decrypt(Register source_addr, Register dest_addr, Register key, Register len);
 
+  // Shared implementation for ECB/AES Encrypt and Decrypt, which does 4 blocks
+  // in a loop at a time to hide instruction latency. Set is_encrypt=true for
+  // encryption, false for decryption.
+  address generate_electronicCodeBook_AESCrypt_Parallel(bool is_encrypt);
+
+  // A version of ECB/AES Encrypt which does 4 blocks in a loop at a time
+  // to hide instruction latency
+  address generate_electronicCodeBook_encryptAESCrypt_Parallel();
+
+  // A version of ECB/AES Decrypt which does 4 blocks in a loop at a time
+  // to hide instruction latency
+  address generate_electronicCodeBook_decryptAESCrypt_Parallel();
+
   // Vector AES Galois Counter Mode implementation
   address generate_galoisCounterMode_AESCrypt();
   void aesgcm_encrypt(Register in, Register len, Register ct, Register out, Register key,
@@ -392,6 +399,8 @@ class StubGenerator: public StubCodeGenerator {
                                      XMMRegister xmm1, XMMRegister xmm2, XMMRegister xmm3, XMMRegister xmm4,
                                      XMMRegister xmm5, XMMRegister xmm6, XMMRegister xmm7, XMMRegister xmm8);
   void ghash_last_8_avx2(Register subkeyHtbl);
+
+  void check_key_offset(Register key, int offset, int load_size);
 
   // Load key and shuffle operation
   void ev_load_key(XMMRegister xmmdst, Register key, int offset, XMMRegister xmm_shuf_mask);

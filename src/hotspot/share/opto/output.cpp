@@ -363,15 +363,6 @@ bool PhaseOutput::need_stack_bang(int frame_size_in_bytes) const {
            DEBUG_ONLY(|| true)));
 }
 
-bool PhaseOutput::need_register_stack_bang() const {
-  // Determine if we need to generate a register stack overflow check.
-  // This is only used on architectures which have split register
-  // and memory stacks.
-  // Bang if the method is not a stub function and has java calls
-  return (C->stub_function() == nullptr && C->has_java_calls());
-}
-
-
 // Compute the size of first NumberOfLoopInstrToAlign instructions at the top
 // of a loop. When aligning a loop we need to provide enough instructions
 // in cpu's fetch buffer to feed decoders. The loop alignment could be
@@ -1347,20 +1338,18 @@ CodeBuffer* PhaseOutput::init_buffer() {
 
   // nmethod and CodeBuffer count stubs & constants as part of method's code.
   // class HandlerImpl is platform-specific and defined in the *.ad files.
-  int exception_handler_req = HandlerImpl::size_exception_handler() + MAX_stubs_size; // add marginal slop for handler
   int deopt_handler_req     = HandlerImpl::size_deopt_handler()     + MAX_stubs_size; // add marginal slop for handler
   stub_req += MAX_stubs_size;   // ensure per-stub margin
   code_req += MAX_inst_size;    // ensure per-instruction margin
 
   if (StressCodeBuffers)
-    code_req = const_req = stub_req = exception_handler_req = deopt_handler_req = 0x10;  // force expansion
+    code_req = const_req = stub_req = deopt_handler_req = 0x10;  // force expansion
 
   int total_req =
           const_req +
           code_req +
           pad_req +
           stub_req +
-          exception_handler_req +
           deopt_handler_req;               // deopt handler
 
   CodeBuffer* cb = code_buffer();
@@ -1789,8 +1778,6 @@ void PhaseOutput::fill_buffer(C2_MacroAssembler* masm, uint* blk_starts) {
   // Only java methods have exception handlers and deopt handlers
   // class HandlerImpl is platform-specific and defined in the *.ad files.
   if (C->method()) {
-    // Emit the exception handler code.
-    _code_offsets.set_value(CodeOffsets::Exceptions, HandlerImpl::emit_exception_handler(masm));
     if (C->failing()) {
       return; // CodeBuffer::expand failed
     }

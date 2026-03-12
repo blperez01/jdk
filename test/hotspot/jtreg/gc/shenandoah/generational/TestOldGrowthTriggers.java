@@ -25,7 +25,9 @@
 /*
  * @test id=generational
  * @summary Test that growth of old-gen triggers old-gen marking
+ * @key intermittent
  * @requires vm.gc.Shenandoah
+ * @requires vm.flagless
  * @library /test/lib
  * @run driver TestOldGrowthTriggers
  */
@@ -33,7 +35,6 @@
 import java.util.*;
 import java.math.BigInteger;
 
-import jdk.test.lib.Asserts;
 import jdk.test.lib.process.ProcessTools;
 import jdk.test.lib.process.OutputAnalyzer;
 
@@ -98,8 +99,12 @@ public class TestOldGrowthTriggers {
                 "-XX:+UnlockExperimentalVMOptions",
                 "-XX:+UseShenandoahGC",
                 "-XX:ShenandoahGCMode=generational",
+                "-XX:ShenandoahMinOldGenGrowthPercent=12.5",
+                "-XX:ShenandoahIgnoreOldGrowthBelowPercentage=10",
+                "-XX:ShenandoahMinOldGenGrowthRemainingHeapPercent=100",
                 "-XX:ShenandoahGuaranteedYoungGCInterval=0",
-                "-XX:ShenandoahGuaranteedOldGCInterval=0"
+                "-XX:ShenandoahGuaranteedOldGCInterval=0",
+                "-XX:-UseCompactObjectHeaders"
         );
 
         testOld("-Xlog:gc",
@@ -109,6 +114,9 @@ public class TestOldGrowthTriggers {
                 "-XX:+UnlockExperimentalVMOptions",
                 "-XX:+UseShenandoahGC",
                 "-XX:ShenandoahGCMode=generational",
+                "-XX:ShenandoahMinOldGenGrowthPercent=12.5",
+                "-XX:ShenandoahIgnoreOldGrowthBelowPercentage=10",
+                "-XX:ShenandoahMinOldGenGrowthRemainingHeapPercent=100",
                 "-XX:ShenandoahGuaranteedYoungGCInterval=0",
                 "-XX:ShenandoahGuaranteedOldGCInterval=0",
                 "-XX:+UseCompactObjectHeaders"
